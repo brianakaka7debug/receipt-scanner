@@ -1,0 +1,17 @@
+# For the web server
+fastapi
+uvicorn[standard]
+gunicorn
+# For reading .env files
+python-dotenv
+
+# For image processing
+opencv-python
+Pillow
+
+# For AI and Google services
+google-generativeai
+gspread
+oauth2client
+
+google-cloud-storage
