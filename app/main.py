@@ -1,4 +1,5 @@
 # app/main.py
+
 import os
 import shutil
 import uuid
@@ -24,27 +25,23 @@ GOOGLE_SHEETS_CREDENTIALS_JSON = os.getenv("GOOGLE_SHEETS_CREDENTIALS_JSON")
 
 # --- Security ---
 api_key_header = APIKeyHeader(name="X-API-Key")
+
 def get_api_key(api_key: str = Security(api_key_header)):
+    """Dependency to check for a valid API key."""
+    # This is the correctly indented version of the function.
     if not api_key or api_key != API_SECRET_KEY:
-        raise HTTPException(status_code=403, detail="Could not validate credentials")
+        raise HTTPException(
+            status_code=403,
+            detail="Could not validate credentials"
+        )
     return api_key
 
-# --- Service Initialization (Unified Approach) ---
+# --- Service Initialization ---
 ocr_service = OCRService(api_key=GEMINI_API_KEY)
-# Pass the same credentials to both Google services
 sheets_service = SheetsService(credentials_json_string=GOOGLE_SHEETS_CREDENTIALS_JSON)
 storage_service = StorageService(credentials_json_string=GOOGLE_SHEETS_CREDENTIALS_JSON, bucket_name=GCS_BUCKET_NAME)
-raise HTTPException(status_code=403, detail="Could not validate credentials")
-    return api_key
 
-# --- Service Initialization (Hybrid Approach) ---
-ocr_service = OCRService(api_key=GEMINI_API_KEY)
-# Pass the credentials string directly to the SheetsService
-sheets_service = SheetsService(credentials_json_string=GOOGLE_SHEETS_CREDENTIALS_JSON)
-# StorageService continues to use the standard ADC method
-storage_service = StorageService(bucket_name=GCS_BUCKET_NAME)
-
-# --- FastAPI Application (The rest of the file is unchanged) ---
+# --- FastAPI Application ---
 app = FastAPI(title="Receipt Scanner API")
 
 class UploadResponse(BaseModel):
@@ -53,6 +50,7 @@ class UploadResponse(BaseModel):
 
 @app.get("/")
 def read_root():
+    """A simple root endpoint to confirm the server is running."""
     return {"status": "ok", "message": "Welcome to the Receipt Scanner API!"}
 
 @app.post("/upload", response_model=UploadResponse)
@@ -61,13 +59,17 @@ async def upload_receipt(
     voice_note: str = Form(None),
     api_key: str = Depends(get_api_key)
 ):
+    """
+    This is the main endpoint to upload and process a receipt image.
+    """
     temp_dir = "temp_uploads"
     os.makedirs(temp_dir, exist_ok=True)
     temp_file_path = os.path.join(temp_dir, f"{uuid.uuid4()}_{image.filename}")
+
     try:
         with open(temp_file_path, "wb") as buffer:
             shutil.copyfileobj(image.file, buffer)
-        
+
         blob_name = f"receipts/{datetime.now().year}/{os.path.basename(temp_file_path)}"
         image_url = storage_service.upload_file(
             source_file_path=temp_file_path,
@@ -85,6 +87,7 @@ async def upload_receipt(
             receipt_data.voice_note = voice_note
 
         sheets_service.append_receipt(receipt=receipt_data, sheet_url=GOOGLE_SHEET_URL)
+
         return UploadResponse(
             message="Receipt processed and uploaded successfully.",
             receipt_data=receipt_data
