@@ -4,28 +4,30 @@ import os
 import requests
 import shutil
 import uuid
-from redis import Redis
-from rq import Queue, Connection, SimpleWorker
 from dotenv import load_dotenv
 
+# --- Important: Import the services and models from your app ---
 from app.services.ocr_llm import OCRService
 from app.services.sheets import SheetsService
 from app.models import Receipt
 
-# --- Configuration & Service Initialization ---
+# --- Configuration ---
 load_dotenv()
 print("Worker: Loading configuration and initializing services...")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GOOGLE_SHEET_URL = os.getenv("GOOGLE_SHEET_URL")
 GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME")
 GOOGLE_SHEETS_CREDENTIALS_JSON = os.getenv("GOOGLE_SHEETS_CREDENTIALS_JSON")
-REDIS_URL = os.getenv("REDIS_URL")
 
+# --- Service Initialization ---
+# The worker initializes its own instances of the services.
 ocr_service = OCRService(api_key=GEMINI_API_KEY)
 sheets_service = SheetsService(credentials_json_string=GOOGLE_SHEETS_CREDENTIALS_JSON)
 print("Worker: Services initialized.")
 
-# --- The Actual Job Function ---
+
+# --- Job Definition ---
+# This is the function that the background worker will execute.
 def process_receipt_job(image_url: str, voice_note: str | None):
     """
     The background job that does the heavy lifting.
@@ -35,7 +37,6 @@ def process_receipt_job(image_url: str, voice_note: str | None):
     """
     temp_dir = "temp_worker_files"
     os.makedirs(temp_dir, exist_ok=True)
-    # Give the temp file a unique name
     local_filename = os.path.join(temp_dir, f"{uuid.uuid4()}.jpg")
 
     try:
@@ -70,11 +71,3 @@ def process_receipt_job(image_url: str, voice_note: str | None):
         # 5. Clean up the downloaded file
         if os.path.exists(local_filename):
             os.remove(local_filename)
-
-# This part is for running the worker directly if needed, Render uses the `rq worker` command.
-if __name__ == '__main__':
-    listen = ['default']
-    redis_conn = Redis.from_url(REDIS_URL)
-    with Connection(redis_conn):
-        worker = SimpleWorker(queues=listen)
-        worker.work()
