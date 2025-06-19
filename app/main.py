@@ -97,3 +97,39 @@ async def upload_receipt(
     finally:
         if os.path.exists(temp_file_path):
             os.remove(temp_file_path)
+
+# Add this new function to app/main.py
+
+@app.post("/parse", response_model=Receipt)
+async def parse_receipt_only(
+    image: UploadFile = File(...),
+    api_key: str = Depends(get_api_key)
+):
+    """
+    A dedicated endpoint for parsing a receipt image and returning the
+    structured data without saving it to Google Sheets.
+    """
+    temp_dir = "temp_uploads"
+    os.makedirs(temp_dir, exist_ok=True)
+    temp_file_path = os.path.join(temp_dir, f"{uuid.uuid4()}_{image.filename}")
+
+    try:
+        # Save the uploaded file to the temporary path
+        with open(temp_file_path, "wb") as buffer:
+            shutil.copyfileobj(image.file, buffer)
+
+        # Call the OCR service to parse the image
+        receipt_data = ocr_service.parse_image(temp_file_path)
+        if not receipt_data:
+            raise HTTPException(status_code=500, detail="Failed to parse receipt data from image.")
+
+        # Return the parsed data directly
+        return receipt_data
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+    finally:
+        # Clean up the temporary file
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
