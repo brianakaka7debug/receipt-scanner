@@ -1,5 +1,4 @@
 # app/main.py
-
 import os
 import shutil
 import uuid
@@ -21,7 +20,6 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GOOGLE_SHEET_URL = os.getenv("GOOGLE_SHEET_URL")
 API_SECRET_KEY = os.getenv("API_SECRET_KEY")
 GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME")
-# Re-introduce the variable for the full JSON content
 GOOGLE_SHEETS_CREDENTIALS_JSON = os.getenv("GOOGLE_SHEETS_CREDENTIALS_JSON")
 
 # --- Security ---
@@ -29,6 +27,14 @@ api_key_header = APIKeyHeader(name="X-API-Key")
 def get_api_key(api_key: str = Security(api_key_header)):
     if not api_key or api_key != API_SECRET_KEY:
         raise HTTPException(status_code=403, detail="Could not validate credentials")
+    return api_key
+
+# --- Service Initialization (Unified Approach) ---
+ocr_service = OCRService(api_key=GEMINI_API_KEY)
+# Pass the same credentials to both Google services
+sheets_service = SheetsService(credentials_json_string=GOOGLE_SHEETS_CREDENTIALS_JSON)
+storage_service = StorageService(credentials_json_string=GOOGLE_SHEETS_CREDENTIALS_JSON, bucket_name=GCS_BUCKET_NAME)
+raise HTTPException(status_code=403, detail="Could not validate credentials")
     return api_key
 
 # --- Service Initialization (Hybrid Approach) ---
