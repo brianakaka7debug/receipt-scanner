@@ -7,7 +7,7 @@ from datetime import datetime
 from ..models import Receipt
 
 class SheetsService:
-    def __init__(self, credentials_json_string: str):
+    def __init__(self):
         """
         Authenticates with the Google Sheets API using service account credentials.
         """

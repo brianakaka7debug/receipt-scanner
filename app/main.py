@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GOOGLE_SHEETS_CREDENTIALS_JSON = os.getenv("GOOGLE_SHEETS_CREDENTIALS_JSON")
+
 GOOGLE_SHEET_URL = os.getenv("GOOGLE_SHEET_URL")
 API_SECRET_KEY = os.getenv("API_SECRET_KEY")
 GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME") # <--- NEW config variable
@@ -32,8 +32,8 @@ def get_api_key(api_key: str = Security(api_key_header)):
 
 # --- Service Initialization ---
 ocr_service = OCRService(api_key=GEMINI_API_KEY)
-sheets_service = SheetsService(credentials_json_string=GOOGLE_SHEETS_CREDENTIALS_JSON)
-storage_service = StorageService(credentials_json_string=GOOGLE_SHEETS_CREDENTIALS_JSON, bucket_name=GCS_BUCKET_NAME) # <--- NEW service instance
+sheets_service = SheetsService()
+storage_service = StorageService(bucket_name=GCS_BUCKET_NAME)
 
 # --- FastAPI Application ---
 app = FastAPI(title="Receipt Scanner API")

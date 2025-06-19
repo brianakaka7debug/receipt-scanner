@@ -6,7 +6,7 @@ from google.cloud import storage
 from datetime import datetime
 
 class StorageService:
-    def __init__(self, credentials_json_string: str, bucket_name: str):
+    def __init__(self, bucket_name: str):
         """
         Initializes the Storage Service client by explicitly loading
         credentials from the provided JSON string.
