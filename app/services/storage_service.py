@@ -21,7 +21,9 @@ class StorageService:
             raise
 
     def upload_file(self, source_file_path: str, destination_blob_name: str) -> str:
-        # This method remains unchanged
+        """
+        Uploads a file to the GCS bucket.
+        """
         try:
             blob = self.bucket.blob(destination_blob_name)
             blob.upload_from_filename(source_file_path)
