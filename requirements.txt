@@ -16,3 +16,6 @@ gspread
 oauth2client
 
 google-cloud-storage
+redis
+rq
+requests
