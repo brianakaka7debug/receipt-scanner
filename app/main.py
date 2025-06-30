@@ -13,6 +13,8 @@ from .models import Receipt
 from .services.ocr_llm import OCRService
 from .services.sheets import SheetsService
 from .services.storage_service import StorageService
+from google.cloud import tasks_v2
+import json
 
 # --- Configuration ---
 from dotenv import load_dotenv
@@ -23,6 +25,10 @@ GOOGLE_SHEET_URL = os.getenv("GOOGLE_SHEET_URL")
 API_SECRET_KEY = os.getenv("API_SECRET_KEY")
 GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME")
 GOOGLE_SHEETS_CREDENTIALS_JSON = os.getenv("GOOGLE_SHEETS_CREDENTIALS_JSON")
+GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
+GCP_QUEUE_LOCATION = os.getenv("GCP_QUEUE_LOCATION")
+GCP_QUEUE_NAME = os.getenv("GCP_QUEUE_NAME")
+WORKER_URL = os.getenv("WORKER_URL") # e.g., https://your-worker-service.onrender.com/process-receipt
 
 # --- Security ---
 api_key_header = APIKeyHeader(name="X-API-Key")
@@ -36,6 +42,7 @@ def get_api_key(api_key: str = Security(api_key_header)):
 ocr_service = OCRService(api_key=GEMINI_API_KEY)
 sheets_service = SheetsService(credentials_json_string=GOOGLE_SHEETS_CREDENTIALS_JSON)
 storage_service = StorageService(credentials_json_string=GOOGLE_SHEETS_CREDENTIALS_JSON, bucket_name=GCS_BUCKET_NAME)
+tasks_client = tasks_v2.CloudTasksClient()
 
 # --- FastAPI Application ---
 app = FastAPI(title="Receipt Scanner API")
@@ -43,7 +50,7 @@ app = FastAPI(title="Receipt Scanner API")
 # We go back to using the original UploadResponse model
 class UploadResponse(BaseModel):
     message: str
-    receipt_data: Receipt
+    task_name: str
 
 @app.get("/")
 def read_root():
@@ -56,7 +63,8 @@ async def upload_receipt(
     api_key: str = Depends(get_api_key)
 ):
     """
-    This endpoint now performs all tasks synchronously for debugging purposes.
+    This endpoint uploads the file to GCS and then creates a Google Cloud Task
+    for asynchronous processing.
     """
     temp_dir = "temp_uploads"
     os.makedirs(temp_dir, exist_ok=True)
@@ -76,28 +84,28 @@ async def upload_receipt(
         if not image_url:
             raise HTTPException(status_code=500, detail="Failed to upload image to Cloud Storage.")
 
-        # 3. Call OCR Service
-        receipt_data = ocr_service.parse_image(temp_file_path)
-        if not receipt_data:
-            raise HTTPException(status_code=500, detail="Failed to parse receipt data from image.")
+        # 3. Create a task in Google Cloud Tasks
+        task_payload = {"image_url": image_url, "voice_note": voice_note}
+        task = {
+            "http_request": {
+                "http_method": tasks_v2.HttpMethod.POST,
+                "url": WORKER_URL,
+                "headers": {"Content-type": "application/json"},
+                "body": json.dumps(task_payload).encode(),
+            }
+        }
+        parent = tasks_client.queue_path(GCP_PROJECT_ID, GCP_QUEUE_LOCATION, GCP_QUEUE_NAME)
+        created_task = tasks_client.create_task(parent=parent, task=task)
 
-        # 4. Add supplementary data
-        receipt_data.image_url = image_url
-        if voice_note:
-            receipt_data.voice_note = voice_note
-
-        # 5. Save to Google Sheets
-        sheets_service.append_receipt(receipt=receipt_data, sheet_url=GOOGLE_SHEET_URL)
-
-        # 6. Return the full response
+        # 4. Return the task name
         return UploadResponse(
-            message="Receipt processed and uploaded successfully.",
-            receipt_data=receipt_data
+            message="Receipt processing task created successfully.",
+            task_name=created_task.name
         )
     except Exception as e:
         # Any error in the process will be caught here and logged by Render
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
     finally:
-        # 7. Clean up the temp file
+        # 5. Clean up the temp file
         if os.path.exists(temp_file_path):
             os.remove(temp_file_path)
